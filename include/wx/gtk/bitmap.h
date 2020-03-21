@@ -126,21 +126,24 @@ public:
     // implementation
     // --------------
 
-    void SetHeight( int height ) wxOVERRIDE;
-    void SetWidth( int width ) wxOVERRIDE;
-    void SetDepth( int depth ) wxOVERRIDE;
+#if WXWIN_COMPATIBILITY_3_0
+    wxDEPRECATED(void SetHeight( int height ) wxOVERRIDE);
+    wxDEPRECATED(void SetWidth( int width ) wxOVERRIDE);
+    wxDEPRECATED(void SetDepth( int depth ) wxOVERRIDE);
+#endif
 
 #ifdef __WXGTK3__
-    GdkPixbuf* GetPixbufNoMask() const;
     cairo_t* CairoCreate() const;
     void Draw(cairo_t* cr, int x, int y, bool useMask = true, const wxColour* fg = NULL, const wxColour* bg = NULL) const;
     void SetSourceSurface(cairo_t* cr, int x, int y, const wxColour* fg = NULL, const wxColour* bg = NULL) const;
+    wxBitmap CreateDisabled() const;
 #else
     GdkPixmap *GetPixmap() const;
     bool HasPixmap() const;
     bool HasPixbuf() const;
     wxBitmap(GdkPixmap* pixmap);
 #endif
+    GdkPixbuf* GetPixbufNoMask() const;
     GdkPixbuf *GetPixbuf() const;
 
     // raw bitmap access support functions

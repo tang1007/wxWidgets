@@ -185,30 +185,6 @@ dnl C++ features test
 dnl ===========================================================================
 
 dnl ---------------------------------------------------------------------------
-dnl WX_CPP_NEW_HEADERS checks whether the compiler has "new" <iostream> header
-dnl or only the old <iostream.h> one - it may be generally assumed that if
-dnl <iostream> exists, the other "new" headers (without .h) exist too.
-dnl
-dnl call WX_CPP_NEW_HEADERS(action-if-true, action-if-false)
-dnl ---------------------------------------------------------------------------
-
-AC_DEFUN([WX_CPP_NEW_HEADERS],
-[
-    AC_LANG_SAVE
-    AC_LANG_CPLUSPLUS
-
-    AC_CHECK_HEADERS([iostream],,, [ ])
-
-    if test "$ac_cv_header_iostream" = "yes" ; then
-      ifelse([$1], , :, [$1])
-    else
-      ifelse([$2], , :, [$2])
-    fi
-
-    AC_LANG_RESTORE
-])
-
-dnl ---------------------------------------------------------------------------
 dnl WX_CHECK_FUNCS(FUNCTIONS...,
 dnl                [ACTION-IF-FOUND],
 dnl                [ACTION-IF-NOT-FOUND],
@@ -393,6 +369,16 @@ AC_DEFUN([WX_ARG_WITH],
 
 dnl same as WX_ARG_WITH but makes it clear that the option is enabled by default
 AC_DEFUN([WX_ARG_WITHOUT], [WX_ARG_WITH($1, [$2], $3, without)])
+
+dnl variant of AC_ARG_WITH which doesn't accept --without-xxx varient
+AC_DEFUN([WX_ARG_ONLY_WITH], [
+        AC_ARG_WITH($1, [$2], [
+            if test "$withval" != yes; then
+                AC_MSG_ERROR([Option --with-$1 doesn't accept any arguments])
+            fi
+            $3
+        ])
+    ])
 
 dnl like WX_ARG_WITH but uses AC_ARG_ENABLE instead of AC_ARG_WITH
 dnl usage: WX_ARG_ENABLE(option, helpmessage, var, [enablestring], [default])

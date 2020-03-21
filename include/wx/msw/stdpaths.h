@@ -4,7 +4,7 @@
 // Author:      Vadim Zeitlin
 // Modified by:
 // Created:     2004-10-19
-// Copyright:   (c) 2004 Vadim Zeitlin <vadim@wxwindows.org>
+// Copyright:   (c) 2004 Vadim Zeitlin <vadim@wxwidgets.org>
 // Licence:     wxWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -29,6 +29,9 @@ public:
     virtual wxString GetUserLocalDataDir() const wxOVERRIDE;
     virtual wxString GetPluginsDir() const wxOVERRIDE;
     virtual wxString GetUserDir(Dir userDir) const wxOVERRIDE;
+    virtual wxString MakeConfigFileName(const wxString& basename,
+                                        ConfigFileConv conv = ConfigFileConv_Ext
+                                        ) const wxOVERRIDE;
 
 
     // MSW-specific methods

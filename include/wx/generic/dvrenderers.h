@@ -36,6 +36,10 @@ public:
         return ActivateCell(cell, model, item, col, mouseEvent);
     }
 
+#if wxUSE_ACCESSIBILITY
+    virtual wxString GetAccessibleDescription() const wxOVERRIDE;
+#endif // wxUSE_ACCESSIBILITY
+
 private:
     wxDECLARE_DYNAMIC_CLASS_NO_COPY(wxDataViewCustomRenderer);
 };
@@ -61,6 +65,9 @@ public:
 
     virtual bool SetValue( const wxVariant &value ) wxOVERRIDE;
     virtual bool GetValue( wxVariant &value ) const wxOVERRIDE;
+#if wxUSE_ACCESSIBILITY
+    virtual wxString GetAccessibleDescription() const wxOVERRIDE;
+#endif // wxUSE_ACCESSIBILITY
 
     virtual bool Render(wxRect cell, wxDC *dc, int state) wxOVERRIDE;
     virtual wxSize GetSize() const wxOVERRIDE;
@@ -76,7 +83,7 @@ protected:
 
 private:
 #if wxUSE_MARKUP
-    class wxMarkupText *m_markupText;
+    class wxItemMarkupText *m_markupText;
 #endif // wxUSE_MARKUP
 
     wxDECLARE_DYNAMIC_CLASS_NO_COPY(wxDataViewTextRenderer);
@@ -97,6 +104,9 @@ public:
 
     virtual bool SetValue( const wxVariant &value ) wxOVERRIDE;
     virtual bool GetValue( wxVariant &value ) const wxOVERRIDE;
+#if wxUSE_ACCESSIBILITY
+    virtual wxString GetAccessibleDescription() const wxOVERRIDE;
+#endif // wxUSE_ACCESSIBILITY
 
     virtual bool Render( wxRect cell, wxDC *dc, int state ) wxOVERRIDE;
     virtual wxSize GetSize() const wxOVERRIDE;
@@ -122,8 +132,13 @@ public:
                               wxDataViewCellMode mode = wxDATAVIEW_CELL_INERT,
                               int align = wxDVR_DEFAULT_ALIGNMENT );
 
+    void ShowAsRadio() { m_radio = true; }
+
     virtual bool SetValue( const wxVariant &value ) wxOVERRIDE;
     virtual bool GetValue( wxVariant &value ) const wxOVERRIDE;
+#if wxUSE_ACCESSIBILITY
+    virtual wxString GetAccessibleDescription() const wxOVERRIDE;
+#endif // wxUSE_ACCESSIBILITY
 
     virtual bool Render( wxRect cell, wxDC *dc, int state ) wxOVERRIDE;
     virtual wxSize GetSize() const wxOVERRIDE;
@@ -136,6 +151,7 @@ public:
                                 const wxMouseEvent *mouseEvent) wxOVERRIDE;
 private:
     bool    m_toggle;
+    bool    m_radio;
 
 protected:
     wxDECLARE_DYNAMIC_CLASS_NO_COPY(wxDataViewToggleRenderer);
@@ -157,6 +173,9 @@ public:
 
     virtual bool SetValue( const wxVariant &value ) wxOVERRIDE;
     virtual bool GetValue( wxVariant& value ) const wxOVERRIDE;
+#if wxUSE_ACCESSIBILITY
+    virtual wxString GetAccessibleDescription() const wxOVERRIDE;
+#endif // wxUSE_ACCESSIBILITY
 
     virtual bool Render(wxRect cell, wxDC *dc, int state) wxOVERRIDE;
     virtual wxSize GetSize() const wxOVERRIDE;
@@ -184,6 +203,9 @@ public:
 
     virtual bool SetValue( const wxVariant &value ) wxOVERRIDE;
     virtual bool GetValue( wxVariant &value ) const wxOVERRIDE;
+#if wxUSE_ACCESSIBILITY
+    virtual wxString GetAccessibleDescription() const wxOVERRIDE;
+#endif // wxUSE_ACCESSIBILITY
 
     virtual bool Render(wxRect cell, wxDC *dc, int state) wxOVERRIDE;
     virtual wxSize GetSize() const wxOVERRIDE;

@@ -46,7 +46,7 @@
     @style{wxLB_NEEDED_SB}
         Only create a vertical scrollbar if needed.
     @style{wxLB_NO_SB}
-        Don't create vertical scrollbar (wxMSW only).
+        Don't create vertical scrollbar (wxMSW and wxGTK only).
     @style{wxLB_SORT}
         The listbox contents are sorted in alphabetical order.
     @endStyleTable
@@ -61,7 +61,9 @@
         list is selected or the selection changes.
     @event{EVT_LISTBOX_DCLICK(id, func)}
         Process a @c wxEVT_LISTBOX_DCLICK event, when the listbox
-        is double-clicked.
+        is double-clicked. On some platforms (notably wxGTK2)
+        pressing the enter key is handled as an equivalent of a
+        double-click.
     @endEventTable
 
     @library{wxcore}
@@ -174,9 +176,9 @@ public:
     void Deselect(int n);
 
     virtual void SetSelection(int n);
-    
+
     virtual int GetSelection() const;
-    
+
     virtual bool SetStringSelection(const wxString& s, bool select);
     virtual bool SetStringSelection(const wxString& s);
 
@@ -301,7 +303,9 @@ public:
         Return the number of items that can fit vertically in the visible area of
         the listbox.
 
-        Returns -1 if the number of items per page couldn't be determined.
+        Returns -1 if the number of items per page couldn't be determined. On
+        wxGTK this method can only determine the number of items per page if
+        there is at least one item in the listbox.
 
         @since 3.1.0
     */
@@ -320,8 +324,8 @@ public:
     // NOTE: Phoenix needs to see the implementation of pure virtuals so it
     // knows that this class is not abstract.
     virtual unsigned int GetCount() const;
-    virtual wxString GetString(unsigned int n) const; 
-    virtual void SetString(unsigned int n, const wxString& s); 
-    virtual int FindString(const wxString& s, bool bCase = false) const;     
+    virtual wxString GetString(unsigned int n) const;
+    virtual void SetString(unsigned int n, const wxString& s);
+    virtual int FindString(const wxString& s, bool bCase = false) const;
 };
 

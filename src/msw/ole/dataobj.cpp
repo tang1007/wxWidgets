@@ -23,6 +23,8 @@
     #pragma hdrstop
 #endif
 
+#if wxUSE_DATAOBJ
+
 #ifndef WX_PRECOMP
     #include "wx/intl.h"
     #include "wx/log.h"
@@ -32,22 +34,23 @@
 
 #include "wx/dataobj.h"
 
-#if wxUSE_OLE
-
 #include "wx/scopedarray.h"
 #include "wx/vector.h"
 #include "wx/msw/private.h"         // includes <windows.h>
-
-#include <oleauto.h>
+#include "wx/msw/dib.h"
 #include "wx/msw/wrapshl.h"
 
-#include "wx/msw/ole/oleutils.h"
+#if wxUSE_OLE
+#include <oleauto.h>
 
-#include "wx/msw/dib.h"
+#include "wx/msw/ole/oleutils.h"
+#endif // wxUSE_OLE
 
 #ifndef CFSTR_SHELLURL
 #define CFSTR_SHELLURL wxT("UniformResourceLocator")
 #endif
+
+#if wxUSE_OLE
 
 // ----------------------------------------------------------------------------
 // functions
@@ -58,6 +61,8 @@
 #else // !wxDEBUG_LEVEL
     #define GetTymedName(tymed) wxEmptyString
 #endif // wxDEBUG_LEVEL/!wxDEBUG_LEVEL
+
+#endif // wxUSE_OLE
 
 namespace
 {
@@ -84,6 +89,7 @@ wxDataFormat HtmlFormatFixup(wxDataFormat format)
     return format;
 }
 
+#if wxUSE_OLE
 // helper function for wxCopyStgMedium()
 HGLOBAL wxGlobalClone(HGLOBAL hglobIn)
 {
@@ -153,9 +159,11 @@ HRESULT wxCopyStgMedium(const STGMEDIUM *pmediumIn, STGMEDIUM *pmediumOut)
 
     return hres;
 }
+#endif // wxUSE_OLE
 
 } // anonymous namespace
 
+#if wxUSE_OLE
 // ----------------------------------------------------------------------------
 // wxIEnumFORMATETC interface implementation
 // ----------------------------------------------------------------------------
@@ -331,6 +339,7 @@ wxIDataObject::SaveSystemData(FORMATETC *pformatetc,
 
     return S_OK;
 }
+#endif // wxUSE_OLE
 
 // ============================================================================
 // implementation
@@ -389,6 +398,7 @@ wxString wxDataFormat::GetId() const
     return s;
 }
 
+#if wxUSE_OLE
 // ----------------------------------------------------------------------------
 // wxIEnumFORMATETC
 // ----------------------------------------------------------------------------
@@ -1029,6 +1039,8 @@ const wxChar *wxDataObject::GetFormatName(wxDataFormat format)
 
 #endif // wxDEBUG_LEVEL
 
+#endif // wxUSE_OLE
+
 // ----------------------------------------------------------------------------
 // wxBitmapDataObject supports CF_DIB format
 // ----------------------------------------------------------------------------
@@ -1064,8 +1076,8 @@ bool wxBitmapDataObject::SetData(size_t WXUNUSED(len), const void *buf)
     wxCHECK_MSG( hbmp, FALSE, wxT("pasting/dropping invalid bitmap") );
 
     const BITMAPINFOHEADER * const pbmih = &pbmi->bmiHeader;
-    wxBitmap bitmap(pbmih->biWidth, pbmih->biHeight, pbmih->biBitCount);
-    bitmap.SetHBITMAP((WXHBITMAP)hbmp);
+    wxBitmap bitmap;
+    bitmap.InitFromHBITMAP((WXHBITMAP)hbmp, pbmih->biWidth, pbmih->biHeight, pbmih->biBitCount);
 
     // TODO: create wxPalette if the bitmap has any
 
@@ -1102,7 +1114,7 @@ bool wxBitmapDataObject2::GetDataHere(void *pBuf) const
 
 bool wxBitmapDataObject2::SetData(size_t WXUNUSED(len), const void *pBuf)
 {
-    HBITMAP hbmp = *(HBITMAP *)pBuf;
+    HBITMAP hbmp = *static_cast<const HBITMAP*>(pBuf);
 
     BITMAP bmp;
     if ( !GetObject(hbmp, sizeof(BITMAP), &bmp) )
@@ -1110,10 +1122,9 @@ bool wxBitmapDataObject2::SetData(size_t WXUNUSED(len), const void *pBuf)
         wxLogLastError(wxT("GetObject(HBITMAP)"));
     }
 
-    wxBitmap bitmap(bmp.bmWidth, bmp.bmHeight, bmp.bmPlanes);
-    bitmap.SetHBITMAP((WXHBITMAP)hbmp);
-
-    if ( !bitmap.IsOk() ) {
+    wxBitmap bitmap;
+    if ( !bitmap.InitFromHBITMAP((WXHBITMAP)hbmp, bmp.bmWidth, bmp.bmHeight, bmp.bmBitsPixel) )
+    {
         wxFAIL_MSG(wxT("pasting/dropping invalid bitmap"));
 
         return false;
@@ -1202,6 +1213,7 @@ bool wxBitmapDataObject::SetData(const wxDataFormat& format,
                                  size_t size, const void *pBuf)
 {
     HBITMAP hbmp;
+    int w, h, d;
     if ( format.GetFormatId() == CF_DIB )
     {
         // here we get BITMAPINFO struct followed by the actual bitmap bits and
@@ -1217,8 +1229,9 @@ bool wxBitmapDataObject::SetData(const wxDataFormat& format,
             wxLogLastError(wxT("CreateDIBitmap"));
         }
 
-        m_bitmap.SetWidth(pbmih->biWidth);
-        m_bitmap.SetHeight(pbmih->biHeight);
+        w = pbmih->biWidth;
+        h = pbmih->biHeight;
+        d = pbmih->biBitCount;
     }
     else // CF_BITMAP
     {
@@ -1231,12 +1244,12 @@ bool wxBitmapDataObject::SetData(const wxDataFormat& format,
             wxLogLastError(wxT("GetObject(HBITMAP)"));
         }
 
-        m_bitmap.SetWidth(bmp.bmWidth);
-        m_bitmap.SetHeight(bmp.bmHeight);
-        m_bitmap.SetDepth(bmp.bmPlanes);
+        w = bmp.bmWidth;
+        h = bmp.bmHeight;
+        d = bmp.bmBitsPixel;
     }
 
-    m_bitmap.SetHBITMAP((WXHBITMAP)hbmp);
+    m_bitmap.InitFromHBITMAP((WXHBITMAP)hbmp, w, h, d);
 
     wxASSERT_MSG( m_bitmap.IsOk(), wxT("pasting invalid bitmap") );
 
@@ -1260,7 +1273,7 @@ bool wxFileDataObject::SetData(size_t WXUNUSED(size),
     // ((char *)&(pDropFiles.pFiles)) + pDropFiles.pFiles. We're also advised
     // to use DragQueryFile to work with this structure, but not told where and
     // how to get HDROP.
-    HDROP hdrop = (HDROP)pData;   // NB: it works, but I'm not sure about it
+    HDROP hdrop = static_cast<HDROP>(const_cast<void*>(pData));   // NB: it works, but I'm not sure about it
 
     // get number of files (magic value -1)
     UINT nFiles = ::DragQueryFile(hdrop, (unsigned)-1, NULL, 0u);
@@ -1483,6 +1496,7 @@ void wxURLDataObject::SetURL(const wxString& url)
 #endif
 }
 
+#if wxUSE_OLE
 // ----------------------------------------------------------------------------
 // private functions
 // ----------------------------------------------------------------------------
@@ -1514,8 +1528,6 @@ static const wxChar *GetTymedName(DWORD tymed)
 // wxDataObject
 // ----------------------------------------------------------------------------
 
-#if wxUSE_DATAOBJ
-
 wxDataObject::wxDataObject()
 {
 }
@@ -1533,8 +1545,23 @@ const wxChar *wxDataObject::GetFormatName(wxDataFormat WXUNUSED(format))
     return NULL;
 }
 
-#endif // wxUSE_DATAOBJ
+const void* wxDataObject::GetSizeFromBuffer(const void* WXUNUSED(buffer),
+    size_t* size, const wxDataFormat& WXUNUSED(format))
+{
+    *size = 0;
+    return NULL;
+}
 
+void* wxDataObject::SetSizeInBuffer(void* buffer, size_t WXUNUSED(size),
+    const wxDataFormat& WXUNUSED(format))
+{
+    return buffer;
+}
+
+size_t wxDataObject::GetBufferOffset(const wxDataFormat& WXUNUSED(format))
+{
+    return 0;
+}
 #endif // wxUSE_OLE/!wxUSE_OLE
 
-
+#endif // wxUSE_DATAOBJ

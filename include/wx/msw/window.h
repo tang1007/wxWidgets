@@ -52,7 +52,23 @@ public:
                 const wxPoint& pos = wxDefaultPosition,
                 const wxSize& size = wxDefaultSize,
                 long style = 0,
-                const wxString& name = wxPanelNameStr);
+                const wxString& name = wxPanelNameStr)
+    {
+        return CreateUsingMSWClass(GetMSWClassName(style),
+                                   parent, id, pos, size, style, name);
+    }
+
+    // Non-portable, MSW-specific Create() variant allowing to create the
+    // window with a custom Windows class name. This can be useful to assign a
+    // custom Windows class, that can be recognized from the outside of the
+    // application, for windows of specific type.
+    bool CreateUsingMSWClass(const wxChar* classname,
+                             wxWindow *parent,
+                             wxWindowID id,
+                             const wxPoint& pos = wxDefaultPosition,
+                             const wxSize& size = wxDefaultSize,
+                             long style = 0,
+                             const wxString& name = wxPanelNameStr);
 
     // implement base class pure virtuals
     virtual void SetLabel(const wxString& label) wxOVERRIDE;
@@ -83,7 +99,10 @@ public:
 
     virtual bool Reparent(wxWindowBase *newParent) wxOVERRIDE;
 
+    virtual wxSize GetDPI() const wxOVERRIDE;
+
     virtual void WarpPointer(int x, int y) wxOVERRIDE;
+    virtual bool EnableTouchEvents(int eventsMask) wxOVERRIDE;
 
     virtual void Refresh( bool eraseBackground = true,
                           const wxRect *rect = (const wxRect *) NULL ) wxOVERRIDE;
@@ -119,10 +138,10 @@ public:
 
 #if wxUSE_DRAG_AND_DROP
     virtual void SetDropTarget( wxDropTarget *dropTarget ) wxOVERRIDE;
-#endif // wxUSE_DRAG_AND_DROP
 
     // Accept files for dragging
     virtual void DragAcceptFiles(bool accept) wxOVERRIDE;
+#endif // wxUSE_DRAG_AND_DROP
 
 #ifndef __WXUNIVERSAL__
     // Native resource loading (implemented in src/msw/nativdlg.cpp)
@@ -148,6 +167,12 @@ public:
 
     void AssociateHandle(WXWidget handle) wxOVERRIDE;
     void DissociateHandle() wxOVERRIDE;
+
+    // returns the handle of the native window to focus when this wxWindow gets
+    // focus  (i.e. in composite windows: by default, this is just the HWND for
+    // this window itself, but it can be overridden to return something
+    // different for composite controls
+    virtual WXHWND MSWGetFocusHWND() const { return GetHWND(); }
 
     // does this window have deferred position and/or size?
     bool IsSizeDeferred() const;
@@ -189,8 +214,8 @@ public:
     void SubclassWin(WXHWND hWnd);
     void UnsubclassWin();
 
-    WXFARPROC MSWGetOldWndProc() const { return m_oldWndProc; }
-    void MSWSetOldWndProc(WXFARPROC proc) { m_oldWndProc = proc; }
+    WXWNDPROC MSWGetOldWndProc() const { return m_oldWndProc; }
+    void MSWSetOldWndProc(WXWNDPROC proc) { m_oldWndProc = proc; }
 
     // return true if the window is of a standard (i.e. not wxWidgets') class
     //
@@ -230,8 +255,11 @@ public:
     // get the HWND to be used as parent of this window with CreateWindow()
     virtual WXHWND MSWGetParent() const;
 
-    // get the Win32 window class name used by all wxWindow objects by default
-    static const wxChar *MSWGetRegisteredClassName();
+    // Return the name of the Win32 class that should be used by this wxWindow
+    // object, taking into account wxFULL_REPAINT_ON_RESIZE style (if it's not
+    // specified, the wxApp::GetNoRedrawClassSuffix()-suffixed version of the
+    // class is used).
+    static const wxChar *GetMSWClassName(long style);
 
     // creates the window of specified Windows class with given style, extended
     // style, title and geometry (default values
@@ -341,6 +369,16 @@ public:
     bool HandleMouseWheel(wxMouseWheelAxis axis,
                           WXWPARAM wParam, WXLPARAM lParam);
 
+    // Common gesture event initialization, returns true if it is the initial
+    // event (GF_BEGIN set in flags), false otherwise.
+    bool InitGestureEvent(wxGestureEvent& event, const wxPoint& pt, WXDWORD flags);
+
+    bool HandlePanGesture(const wxPoint& pt, WXDWORD flags);
+    bool HandleZoomGesture(const wxPoint& pt, WXDWORD fingerDistance, WXDWORD flags);
+    bool HandleRotateGesture(const wxPoint& pt, WXDWORD angleArgument, WXDWORD flags);
+    bool HandleTwoFingerTap(const wxPoint& pt, WXDWORD flags);
+    bool HandlePressAndTap(const wxPoint& pt, WXDWORD flags);
+
     bool HandleChar(WXWPARAM wParam, WXLPARAM lParam);
     bool HandleKeyDown(WXWPARAM wParam, WXLPARAM lParam);
     bool HandleKeyUp(WXWPARAM wParam, WXLPARAM lParam);
@@ -415,7 +453,7 @@ public:
     // The brush returned from here must remain valid at least until the next
     // event loop iteration. Returning 0, as is done by default, indicates
     // there is no custom background brush.
-    virtual WXHBRUSH MSWGetCustomBgBrush() { return 0; }
+    virtual WXHBRUSH MSWGetCustomBgBrush() { return NULL; }
 
     // this function should return the brush to paint the children controls
     // background or 0 if this window doesn't impose any particular background
@@ -513,10 +551,8 @@ public:
     // check if mouse is in the window
     bool IsMouseInWindow() const;
 
-    // check if a native double-buffering applies for this window
+    virtual void SetDoubleBuffered(bool on) wxOVERRIDE;
     virtual bool IsDoubleBuffered() const wxOVERRIDE;
-
-    void SetDoubleBuffered(bool on);
 
     // synthesize a wxEVT_LEAVE_WINDOW event and set m_mouseInWindow to false
     void GenerateMouseLeave();
@@ -548,7 +584,24 @@ public:
     // Return true if the button was clicked, false otherwise.
     static bool MSWClickButtonIfPossible(wxButton* btn);
 
+    // This method is used for handling wxRadioButton-related complications,
+    // see wxRadioButton::SetValue().
+    //
+    // It should be overridden by all classes storing the "last focused"
+    // window to avoid focusing an unset radio button when regaining focus.
+    virtual void WXSetPendingFocus(wxWindow* WXUNUSED(win)) {}
+
+    // Called from WM_DPICHANGED handler for all windows to let them update
+    // any sizes and fonts used internally when the DPI changes and generate
+    // wxDPIChangedEvent to let the user code do the same thing as well.
+    void MSWUpdateOnDPIChange(const wxSize& oldDPI, const wxSize& newDPI);
+
 protected:
+    // Called from MSWUpdateOnDPIChange() specifically to update the control
+    // font, as this may need to be done differently for some specific native
+    // controls. The default version updates m_font of this window.
+    virtual void MSWUpdateFontOnDPIChange(const wxSize& newDPI);
+
     // this allows you to implement standard control borders without
     // repeating the code in different classes that are not derived from
     // wxControl
@@ -569,7 +622,7 @@ protected:
     WXHWND                m_hWnd;
 
     // the old window proc (we subclass all windows)
-    WXFARPROC             m_oldWndProc;
+    WXWNDPROC             m_oldWndProc;
 
     // additional (MSW specific) flags
     bool                  m_mouseInWindow:1;
@@ -585,6 +638,8 @@ protected:
                                  int *descent = NULL,
                                  int *externalLeading = NULL,
                                  const wxFont *font = NULL) const wxOVERRIDE;
+    static void MSWDoClientToScreen( WXHWND hWnd, int *x, int *y );
+    static void MSWDoScreenToClient( WXHWND hWnd, int *x, int *y );
     virtual void DoClientToScreen( int *x, int *y ) const wxOVERRIDE;
     virtual void DoScreenToClient( int *x, int *y ) const wxOVERRIDE;
     virtual void DoGetPosition( int *x, int *y ) const wxOVERRIDE;
@@ -701,8 +756,27 @@ private:
     bool MSWSafeIsDialogMessage(WXMSG* msg);
 #endif // __WXUNIVERSAL__
 
-#if wxUSE_DEFERRED_SIZING
+    static inline bool MSWIsPositionDirectlySupported(int x, int y)
+    {
+        // The supported coordinate intervals for various functions are:
+        // - MoveWindow, DeferWindowPos: [-32768, 32767] a.k.a. [SHRT_MIN, SHRT_MAX];
+        // - CreateWindow, CreateWindowEx: [-32768, 32554].
+        // CreateXXX will _sometimes_ manage to create the window at higher coordinates
+        // like 32580, 32684, 32710, but that was not consistent and the lowest common
+        // limit was 32554 (so far at least).
+        return (x >= SHRT_MIN && x <= 32554 && y >= SHRT_MIN && y <= 32554);
+    }
+
 protected:
+    WXHWND MSWCreateWindowAtAnyPosition(WXDWORD exStyle, const wxChar* clName,
+                                        const wxChar* title, WXDWORD style,
+                                        int x, int y, int width, int height,
+                                        WXHWND parent, wxWindowID id);
+
+    void MSWMoveWindowToAnyPosition(WXHWND hwnd, int x, int y,
+                                    int width, int height, bool bRepaint);
+
+#if wxUSE_DEFERRED_SIZING
     // this function is called after the window was resized to its new size
     virtual void MSWEndDeferWindowPos()
     {

@@ -128,6 +128,8 @@ public:
 
     virtual void SetLayoutDirection(wxLayoutDirection dir) wxOVERRIDE;
 
+    virtual const wxTextEntry* WXGetTextEntry() const wxOVERRIDE { return this; }
+
 protected:
 #if wxUSE_TOOLTIPS
     virtual void DoSetToolTip(wxToolTip *tip) wxOVERRIDE;
@@ -157,6 +159,14 @@ private:
     // when we do have an edit control so they assert if this is not the case
     virtual wxWindow *GetEditableWindow() wxOVERRIDE;
     virtual WXHWND GetEditHWND() const wxOVERRIDE;
+
+    // Common part of MSWProcessEditMsg() and MSWProcessSpecialKey(), return
+    // true if the key was processed.
+    bool MSWProcessEditSpecialKey(WXWPARAM vkey);
+
+#if wxUSE_OLE
+    virtual void MSWProcessSpecialKey(wxKeyEvent& event) wxOVERRIDE;
+#endif // wxUSE_OLE
 
     // common part of all ctors
     void Init()

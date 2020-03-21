@@ -153,6 +153,8 @@ public:
     wxVariant       m_storedValues;
 
     wxString        m_savedState;
+    bool            m_hasHeader;
+    bool            m_labelEditingEnabled;
 
 
     void CreateGrid( int style, int extraStyle );
@@ -198,6 +200,7 @@ public:
     void OnCatColoursUpdateUI( wxUpdateUIEvent& event );
     void OnCatColours( wxCommandEvent& event );
     void OnSetColumns( wxCommandEvent& event );
+    void OnSetVirtualWidth(wxCommandEvent& evt);
     void OnMisc( wxCommandEvent& event );
     void OnPopulateClick( wxCommandEvent& event );
     void OnSetSpinCtrlEditorClick( wxCommandEvent& event );

@@ -83,6 +83,8 @@
 
 // TODO: Borland probably has _wgetcwd as well?
 #if defined(_MSC_VER) || defined(__MINGW32__)
+    wxDECL_FOR_STRICT_MINGW32(wchar_t*, _wgetcwd, (wchar_t*, int))
+
     #define HAVE_WGETCWD
 #endif
 
@@ -796,15 +798,13 @@ wxString wxPathOnly (const wxString& path)
 
 #if defined(__WXMAC__) && !defined(__WXOSX_IPHONE__)
 
-#define kDefaultPathStyle kCFURLPOSIXPathStyle
-
 wxString wxMacFSRefToPath( const FSRef *fsRef , CFStringRef additionalPathComponent )
 {
     CFURLRef fullURLRef;
     fullURLRef = CFURLCreateFromFSRef(NULL, fsRef);
     if ( fullURLRef == NULL)
         return wxEmptyString;
-    
+
     if ( additionalPathComponent )
     {
         CFURLRef parentURLRef = fullURLRef ;
@@ -812,7 +812,7 @@ wxString wxMacFSRefToPath( const FSRef *fsRef , CFStringRef additionalPathCompon
             additionalPathComponent,false);
         CFRelease( parentURLRef ) ;
     }
-    wxCFStringRef cfString( CFURLCopyFileSystemPath(fullURLRef, kDefaultPathStyle ));
+    wxCFStringRef cfString( CFURLCopyFileSystemPath(fullURLRef, kCFURLPOSIXPathStyle ));
     CFRelease( fullURLRef ) ;
 
     return wxCFStringRef::AsStringWithNormalizationFormC(cfString);
@@ -821,15 +821,11 @@ wxString wxMacFSRefToPath( const FSRef *fsRef , CFStringRef additionalPathCompon
 OSStatus wxMacPathToFSRef( const wxString&path , FSRef *fsRef )
 {
     OSStatus err = noErr ;
-    CFMutableStringRef cfMutableString = CFStringCreateMutableCopy(NULL, 0, wxCFStringRef(path));
-    CFStringNormalize(cfMutableString,kCFStringNormalizationFormD);
-    CFURLRef url = CFURLCreateWithFileSystemPath(kCFAllocatorDefault, cfMutableString , kDefaultPathStyle, false);
-    CFRelease( cfMutableString );
+    wxCFRef<CFURLRef> url(wxOSXCreateURLFromFileSystemPath(path));
     if ( NULL != url )
     {
         if ( CFURLGetFSRef(url, fsRef) == false )
             err = fnfErr ;
-        CFRelease( url ) ;
     }
     else
     {
@@ -844,6 +840,13 @@ wxString wxMacHFSUniStrToString( ConstHFSUniStr255Param uniname )
                                                       uniname->unicode,
                                                       uniname->length ) );
     return wxCFStringRef::AsStringWithNormalizationFormC(cfname);
+}
+
+CFURLRef wxOSXCreateURLFromFileSystemPath( const wxString& path)
+{
+    wxCFRef<CFMutableStringRef> cfMutableString(CFStringCreateMutableCopy(NULL, 0, wxCFStringRef(path)));
+    CFStringNormalize(cfMutableString,kCFStringNormalizationFormD);
+    return CFURLCreateWithFileSystemPath(kCFAllocatorDefault, cfMutableString , kCFURLPOSIXPathStyle, false);
 }
 
 #ifndef __LP64__
@@ -864,7 +867,7 @@ void wxMacFilename2FSSpec( const wxString& path , FSSpec *spec )
     FSRef fsRef;
     wxMacPathToFSRef( path , &fsRef );
     err = FSGetCatalogInfo(&fsRef, kFSCatInfoNone, NULL, NULL, spec, NULL);
-    verify_noerr( err );
+    __Verify_noErr(err);
 }
 #endif
 
@@ -1161,7 +1164,7 @@ bool wxMkdir(const wxString& dir, int perm)
 #if defined(__WXMAC__) && !defined(__UNIX__)
     if ( mkdir(dir.fn_str(), 0) != 0 )
 
-    // assume mkdir() has 2 args on non Windows-OS/2 platforms and on Windows too
+    // assume mkdir() has 2 args on all platforms
     // for the GNU compiler
 #elif (!defined(__WINDOWS__)) || \
       (defined(__GNUWIN32__) && !defined(__MINGW32__)) ||                \
@@ -1173,7 +1176,7 @@ bool wxMkdir(const wxString& dir, int perm)
   #else
     if ( mkdir(wxFNCONV(dirname), perm) != 0 )
   #endif
-#else  // !MSW and !OS/2 VAC++
+#else  // MSW and VC++
     wxUnusedVar(perm);
     if ( wxMkDir(dir.fn_str()) != 0 )
 #endif // !MSW/MSW
@@ -1190,7 +1193,7 @@ bool wxRmdir(const wxString& dir, int WXUNUSED(flags))
 #if defined(__VMS__)
     return false; //to be changed since rmdir exists in VMS7.x
 #else
-    if ( wxRmDir(dir.fn_str()) != 0 )
+    if ( wxRmDir(dir) != 0 )
     {
         wxLogSysError(_("Directory '%s' couldn't be deleted"), dir);
         return false;
@@ -1597,8 +1600,7 @@ int WXDLLIMPEXP_BASE wxParseCommonDialogsFilter(const wxString& filterStr,
 static bool wxCheckWin32Permission(const wxString& path, DWORD access)
 {
     // quoting the MSDN: "To obtain a handle to a directory, call the
-    // CreateFile function with the FILE_FLAG_BACKUP_SEMANTICS flag", but this
-    // doesn't work under Win9x/ME but then it's not needed there anyhow
+    // CreateFile function with the FILE_FLAG_BACKUP_SEMANTICS flag"
     const DWORD dwAttr = ::GetFileAttributes(path.t_str());
     if ( dwAttr == INVALID_FILE_ATTRIBUTES )
     {
@@ -1606,7 +1608,7 @@ static bool wxCheckWin32Permission(const wxString& path, DWORD access)
         return false;
     }
 
-    HANDLE h = ::CreateFile
+    const HANDLE h = ::CreateFile
                  (
                     path.t_str(),
                     access,

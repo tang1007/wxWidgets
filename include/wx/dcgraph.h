@@ -32,7 +32,7 @@ public:
     wxGCDC( const wxEnhMetaFileDC& dc );
 #endif
     wxGCDC(wxGraphicsContext* context);
-    
+
     wxGCDC();
     virtual ~wxGCDC();
 
@@ -60,6 +60,10 @@ public:
 #if defined(__WXMSW__) && wxUSE_ENH_METAFILE
     wxGCDCImpl( wxDC *owner, const wxEnhMetaFileDC& dc );
 #endif
+
+    // Ctor using an existing graphics context given to wxGCDC ctor.
+    wxGCDCImpl(wxDC *owner, wxGraphicsContext* context);
+
     wxGCDCImpl( wxDC *owner );
 
     virtual ~wxGCDCImpl();
@@ -83,7 +87,10 @@ public:
     virtual void SetBrush(const wxBrush& brush) wxOVERRIDE;
     virtual void SetBackground(const wxBrush& brush) wxOVERRIDE;
     virtual void SetBackgroundMode(int mode) wxOVERRIDE;
+
+#if wxUSE_PALETTE
     virtual void SetPalette(const wxPalette& palette) wxOVERRIDE;
+#endif
 
     virtual void DestroyClippingRegion() wxOVERRIDE;
 
@@ -192,8 +199,7 @@ public:
     virtual void DoSetDeviceClippingRegion(const wxRegion& region) wxOVERRIDE;
     virtual void DoSetClippingRegion(wxCoord x, wxCoord y,
         wxCoord width, wxCoord height) wxOVERRIDE;
-    virtual void DoGetClippingBox(wxCoord *x, wxCoord *y,
-                                  wxCoord *w, wxCoord *h) const wxOVERRIDE;
+    virtual bool DoGetClippingRect(wxRect& rect) const wxOVERRIDE;
 
     virtual void DoGetTextExtent(const wxString& string,
         wxCoord *x, wxCoord *y,
@@ -228,7 +234,17 @@ protected:
     bool m_isClipBoxValid;
 
 private:
+    // This method only initializes trivial fields.
+    void CommonInit();
+
+    // This method initializes all fields (including those initialized by
+    // CommonInit() as it calls it) and the given context, if non-null, which
+    // is assumed to be newly created.
     void Init(wxGraphicsContext*);
+
+    // This method initializes m_graphicContext, m_ok and m_matrixOriginal
+    // fields, returns true if the context was valid.
+    bool DoInitContext(wxGraphicsContext* ctx);
 
     wxDECLARE_CLASS(wxGCDCImpl);
     wxDECLARE_NO_COPY_CLASS(wxGCDCImpl);

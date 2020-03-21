@@ -118,19 +118,19 @@ class wxDataViewRendererNativeData
 {
 public:
     wxDataViewRendererNativeData()
-        : m_Object(NULL), m_ColumnCell(NULL)
+        : m_Object(NULL), m_ColumnCell(NULL), m_ItemCell(NULL)
     {
         Init();
     }
 
     wxDataViewRendererNativeData(NSCell* initColumnCell)
-        : m_Object(NULL), m_ColumnCell([initColumnCell retain])
+        : m_Object(NULL), m_ColumnCell([initColumnCell retain]), m_ItemCell(NULL)
     {
         Init();
     }
 
     wxDataViewRendererNativeData(NSCell* initColumnCell, id initObject)
-        : m_Object([initObject retain]), m_ColumnCell([initColumnCell retain])
+        : m_Object([initObject retain]), m_ColumnCell([initColumnCell retain]), m_ItemCell(NULL)
     {
         Init();
     }
@@ -142,6 +142,7 @@ public:
 
         [m_origFont release];
         [m_origTextColour release];
+        [m_origBackgroundColour release];
     }
 
     NSCell* GetColumnCell() const { return m_ColumnCell; }
@@ -186,6 +187,7 @@ public:
     // ones that do.
     NSFont *GetOriginalFont() const { return m_origFont; }
     NSColor *GetOriginalTextColour() const { return m_origTextColour; }
+    NSColor *GetOriginalBackgroundColour() const { return m_origBackgroundColour; }
 
     void SaveOriginalFont(NSFont *font)
     {
@@ -195,6 +197,11 @@ public:
     void SaveOriginalTextColour(NSColor *textColour)
     {
         m_origTextColour = [textColour retain];
+    }
+
+    void SaveOriginalBackgroundColour(NSColor *backgroundColour)
+    {
+        m_origBackgroundColour = [backgroundColour retain];
     }
 
     // The ellipsization mode which we need to set for each cell being rendered.
@@ -226,6 +233,7 @@ private:
     // we own those if they're non-NULL
     NSFont *m_origFont;
     NSColor *m_origTextColour;
+    NSColor *m_origBackgroundColour;
 
     wxEllipsizeMode m_ellipsizeMode;
 
@@ -367,6 +375,21 @@ private:
     -(NSSize) cellSize;
 @end
 
+
+// ============================================================================
+// NSTextFieldCell customized to allow vertical alignment
+// ============================================================================
+
+@interface wxTextFieldCell : NSTextFieldCell
+{
+@private
+    int alignment_;
+    BOOL adjustRect_;
+}
+
+    -(void) setWXAlignment:(int)alignment;
+@end
+
 // ============================================================================
 // wxImageTextCell
 // ============================================================================
@@ -382,7 +405,7 @@ private:
 // into their reserved space. Smaller or not existing images use the fixed
 // reserved size and are scaled if necessary.
 //
-@interface wxImageTextCell : NSTextFieldCell
+@interface wxImageTextCell : wxTextFieldCell
 {
 @private
     CGFloat xImageShift;    // shift for the image in x-direction from border
@@ -465,14 +488,13 @@ public:
     virtual void EnsureVisible(const wxDataViewItem& item,
                                wxDataViewColumn const* columnPtr);
     virtual unsigned int GetCount() const;
+    virtual int GetCountPerPage() const;
     virtual wxRect GetRectangle(const wxDataViewItem& item,
                                 wxDataViewColumn const* columnPtr);
+    virtual wxDataViewItem GetTopItem() const;
     virtual bool IsExpanded(const wxDataViewItem& item) const;
     virtual bool Reload();
-    virtual bool Remove(const wxDataViewItem& parent,
-                        const wxDataViewItem& item);
-    virtual bool Remove(const wxDataViewItem& parent,
-                        const wxDataViewItemArray& item);
+    virtual bool Remove(const wxDataViewItem& parent);
     virtual bool Update(const wxDataViewColumn* columnPtr);
     virtual bool Update(const wxDataViewItem& parent,
                         const wxDataViewItem& item);
@@ -515,7 +537,7 @@ public:
     virtual void SetRowHeight(int height);
     virtual void SetRowHeight(const wxDataViewItem& item, unsigned int height);
     virtual void OnSize();
-    
+
     virtual void StartEditor( const wxDataViewItem & item, unsigned int column );
 
     // drag & drop helper methods

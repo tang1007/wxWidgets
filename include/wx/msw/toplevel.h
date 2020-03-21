@@ -11,6 +11,8 @@
 #ifndef _WX_MSW_TOPLEVEL_H_
 #define _WX_MSW_TOPLEVEL_H_
 
+#include "wx/weakref.h"
+
 // ----------------------------------------------------------------------------
 // wxTopLevelWindowMSW
 // ----------------------------------------------------------------------------
@@ -53,6 +55,7 @@ public:
     virtual bool IsIconized() const wxOVERRIDE;
     virtual void SetIcons(const wxIconBundle& icons ) wxOVERRIDE;
     virtual void Restore() wxOVERRIDE;
+    virtual bool Destroy() wxOVERRIDE;
 
     virtual void SetLayoutDirection(wxLayoutDirection dir) wxOVERRIDE;
 
@@ -88,6 +91,9 @@ public:
     // NULL if getting the system menu failed.
     wxMenu *MSWGetSystemMenu() const;
 
+    // Enable or disable the close button of the specified window.
+    static bool MSWEnableCloseButton(WXHWND hwnd, bool enable = true);
+
 
     // implementation from now on
     // --------------------------
@@ -95,9 +101,12 @@ public:
     // event handlers
     void OnActivate(wxActivateEvent& event);
 
-    // called by wxWindow whenever it gets focus
-    void SetLastFocus(wxWindow *win) { m_winLastFocused = win; }
-    wxWindow *GetLastFocus() const { return m_winLastFocused; }
+    // called from wxWidgets code itself only when the pending focus, i.e. the
+    // element which should get focus when this TLW is activated again, changes
+    virtual void WXSetPendingFocus(wxWindow* win) wxOVERRIDE
+    {
+        m_winLastFocused = win;
+    }
 
     // translate wxWidgets flags to Windows ones
     virtual WXDWORD MSWGetStyle(long flags, WXDWORD *exstyle) const wxOVERRIDE;
@@ -110,6 +119,9 @@ public:
 
     // returns true if the platform should explicitly apply a theme border
     virtual bool CanApplyThemeBorder() const wxOVERRIDE { return false; }
+
+    // This function is only for internal use.
+    void MSWSetShowCommand(WXUINT showCmd) { m_showCmd = showCmd; }
 
 protected:
     // common part of all ctors
@@ -127,8 +139,11 @@ protected:
                       const wxPoint& pos,
                       const wxSize& size);
 
-    // common part of Iconize(), Maximize() and Restore()
+    // Just a wrapper around MSW ShowWindow().
     void DoShowWindow(int nShowCmd);
+
+    // Return true if the window is iconized at MSW level, ignoring m_showCmd.
+    bool MSWIsIconized() const;
 
     // override those to return the normal window coordinates even when the
     // window is minimized
@@ -151,13 +166,14 @@ protected:
                                           int& x, int& y,
                                           int& w, int& h) const wxOVERRIDE;
 
+    // WM_DPICHANGED handler.
+    bool HandleDPIChange(const wxSize& newDPI, const wxRect& newRect);
 
-    // is the window currently iconized?
-    bool m_iconized;
-
-    // should the frame be maximized when it will be shown? set by Maximize()
-    // when it is called while the frame is hidden
-    bool m_maximizeOnShow;
+    // This field contains the show command to use when showing the window the
+    // next time and also indicates whether the window should be considered
+    // being iconized or maximized (which may be different from whether it's
+    // actually iconized or maximized at MSW level).
+    WXUINT m_showCmd;
 
     // Data to save/restore when calling ShowFullScreen
     long                  m_fsStyle; // Passed to ShowFullScreen
@@ -176,9 +192,17 @@ protected:
     // The last focused child: we remember it when we're deactivated and
     // restore focus to it when we're activated (this is done here) or restored
     // from iconic state (done by wxFrame).
-    wxWindow             *m_winLastFocused;
+    wxWindowRef m_winLastFocused;
 
 private:
+    // Keep track of the DPI used in this window. So when per-monitor dpi
+    // awareness is enabled, both old and new DPI are known for
+    // wxDPIChangedEvent and wxWindow::MSWUpdateOnDPIChange.
+    wxSize m_activeDPI;
+
+    // This window supports handling per-monitor DPI awareness when the
+    // application manifest contains <dpiAwareness>PerMonitorV2</dpiAwareness>.
+    bool m_perMonitorDPIaware;
 
     // The system menu: initially NULL but can be set (once) by
     // MSWGetSystemMenu(). Owned by this window.

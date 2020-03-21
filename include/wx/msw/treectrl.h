@@ -202,14 +202,15 @@ public:
     // returns true if the platform should explicitly apply a theme border
     virtual bool CanApplyThemeBorder() const wxOVERRIDE { return false; }
 
+    virtual bool IsDoubleBuffered() const wxOVERRIDE;
+    virtual void SetDoubleBuffered(bool on) wxOVERRIDE;
+
 protected:
     // Implement "update locking" in a custom way for this control.
     virtual void DoFreeze() wxOVERRIDE;
     virtual void DoThaw() wxOVERRIDE;
 
-    virtual void DoSetSize(int x, int y,
-                           int width, int height,
-                           int sizeFlags = wxSIZE_AUTO) wxOVERRIDE;
+    virtual bool MSWShouldSetDefaultFont() const wxOVERRIDE { return false; }
 
     // SetImageList helper
     void SetAnyImageList(wxImageList *imageList, int which);
@@ -260,6 +261,7 @@ protected:
     // return true if the key was processed, false otherwise
     bool MSWHandleSelectionKey(unsigned vkey);
 
+    virtual void MSWUpdateFontOnDPIChange(const wxSize& newDPI) wxOVERRIDE;
 
     // data used only while editing the item label:
     wxTextCtrl  *m_textCtrl;        // text control in which it is edited
@@ -314,6 +316,9 @@ private:
     // Virtual root item, if wxTR_HIDE_ROOT is set.
     void* m_pVirtualRoot;
 
+    // Item to call EnsureVisible() on when the tree is thawed, if necessary.
+    wxTreeItemId m_htEnsureVisibleOnThaw;
+
     // the starting item for selection with Shift
     wxTreeItemId m_htSelStart, m_htClickedItem;
     wxPoint m_ptClick;
@@ -333,9 +338,6 @@ private:
 
     // whether we need to deselect other items on mouse up
     bool m_mouseUpDeselect;
-
-    // The size to restore the control to when it is thawed, see DoThaw().
-    wxSize m_thawnSize;
 
     friend class wxTreeItemIndirectData;
     friend class wxTreeSortHelper;

@@ -19,6 +19,7 @@
 
 #include "wx/osx/core/private.h"
 #include "wx/osx/cocoa/private.h"
+#include "wx/osx/private/available.h"
 
 #import <AppKit/NSColor.h>
 #import <Foundation/Foundation.h>
@@ -41,6 +42,39 @@ static int wxOSXGetUserDefault(NSString* key, int defaultValue)
     return [setting intValue];
 }
 
+// ----------------------------------------------------------------------------
+// wxSystemAppearance
+// ----------------------------------------------------------------------------
+
+wxString wxSystemAppearance::GetName() const
+{
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_14
+    if ( WX_IS_MACOS_AVAILABLE(10, 14) )
+    {
+        return wxStringWithNSString([[NSApp effectiveAppearance] name]);
+    }
+#endif
+
+    return wxString();
+}
+
+bool wxSystemAppearance::IsDark() const
+{
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_14
+    if ( WX_IS_MACOS_AVAILABLE(10, 14) )
+    {
+        const NSAppearanceName
+            appearanceName = [[NSApp effectiveAppearance]
+                                bestMatchFromAppearancesWithNames:
+                                @[NSAppearanceNameAqua, NSAppearanceNameDarkAqua]];
+
+        return [appearanceName isEqualToString:NSAppearanceNameDarkAqua];
+    }
+#endif
+
+    // Fall back on the generic method when not running under 10.14.
+    return IsUsingDarkBackground();
+}
 
 // ----------------------------------------------------------------------------
 // wxSystemSettingsNative
@@ -52,6 +86,8 @@ static int wxOSXGetUserDefault(NSString* key, int defaultValue)
 
 wxColour wxSystemSettingsNative::GetColour(wxSystemColour index)
 {
+    wxOSXEffectiveAppearanceSetter helper;
+    
     NSColor* sysColor = nil;
     switch( index )
     {
@@ -74,9 +110,14 @@ wxColour wxSystemSettingsNative::GetColour(wxSystemColour index)
         sysColor = [NSColor windowFrameColor];
         break;
     case wxSYS_COLOUR_WINDOW:
-        return wxColour(wxMacCreateCGColorFromHITheme( 15 /* kThemeBrushDocumentWindowBackground */ )) ;
+        sysColor = [NSColor controlBackgroundColor];
+        break;
     case wxSYS_COLOUR_BTNFACE:
-        return wxColour(wxMacCreateCGColorFromHITheme( 3 /* kThemeBrushDialogBackgroundActive */));
+        if ( WX_IS_MACOS_AVAILABLE(10, 14 ) )
+            sysColor = [NSColor windowBackgroundColor];
+        else
+            sysColor = [NSColor controlColor];
+        break;
     case wxSYS_COLOUR_LISTBOX:
         sysColor = [NSColor controlBackgroundColor];
         break;
@@ -88,7 +129,6 @@ wxColour wxSystemSettingsNative::GetColour(wxSystemColour index)
     case wxSYS_COLOUR_WINDOWTEXT:
     case wxSYS_COLOUR_CAPTIONTEXT:
     case wxSYS_COLOUR_INFOTEXT:
-    case wxSYS_COLOUR_INACTIVECAPTIONTEXT:
     case wxSYS_COLOUR_LISTBOXTEXT:
         sysColor = [NSColor controlTextColor];
         break;
@@ -98,6 +138,7 @@ wxColour wxSystemSettingsNative::GetColour(wxSystemColour index)
     case wxSYS_COLOUR_BTNHIGHLIGHT:
         sysColor = [NSColor controlHighlightColor];
         break;
+    case wxSYS_COLOUR_INACTIVECAPTIONTEXT:
     case wxSYS_COLOUR_GRAYTEXT:
         sysColor = [NSColor disabledControlTextColor];
         break;
@@ -176,7 +217,7 @@ wxFont wxSystemSettingsNative::GetFont(wxSystemFont index)
 // ----------------------------------------------------------------------------
 
 // Get a system metric, e.g. scrollbar size
-int wxSystemSettingsNative::GetMetric(wxSystemMetric index, wxWindow *WXUNUSED(win))
+int wxSystemSettingsNative::GetMetric(wxSystemMetric index, const wxWindow* WXUNUSED(win))
 {
     int value;
 

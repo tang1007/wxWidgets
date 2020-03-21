@@ -19,7 +19,6 @@
  * under a certain platform
  */
 
-#define wxOSX_USE_ATSU_TEXT 0
 #define wxHAS_OPENGL_ES
 
 #define wxOSX_USE_QUICKTIME 0
@@ -372,6 +371,16 @@
 #undef wxUSE_WEBVIEW
 #define wxUSE_WEBVIEW 0
 #endif
+
+#if wxUSE_SECRETSTORE
+    #undef wxUSE_SECRETSTORE
+    #define wxUSE_SECRETSTORE 0
+#endif
+
+// IconRef datatype does not exist on iOS
+
+#undef wxOSX_USE_ICONREF
+#define wxOSX_USE_ICONREF 0
 
 #endif
     /* _WX_OSX_IPHONE_CHKCONF_H_ */

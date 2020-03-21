@@ -11,10 +11,14 @@
 #ifndef _WX_MSW_ENHMETA_H_
 #define _WX_MSW_ENHMETA_H_
 
+#include "wx/defs.h"
+
+#if wxUSE_ENH_METAFILE
+
 #include "wx/dc.h"
 #include "wx/gdiobj.h"
 
-#if wxUSE_DRAG_AND_DROP
+#if wxUSE_DATAOBJ
     #include "wx/dataobj.h"
 #endif
 
@@ -39,7 +43,7 @@ public:
     bool Play(wxDC *dc, wxRect *rectBound = NULL);
 
     // accessors
-    virtual bool IsOk() const wxOVERRIDE { return m_hMF != 0; }
+    virtual bool IsOk() const wxOVERRIDE { return m_hMF != NULL; }
 
     wxSize GetSize() const;
     int GetWidth() const { return GetSize().x; }
@@ -55,7 +59,7 @@ public:
     // Detach the HENHMETAFILE from this object, i.e. don't delete the handle
     // in the dtor -- the caller is now responsible for doing this, e.g. using
     // Free() method below.
-    WXHANDLE Detach() { WXHANDLE h = m_hMF; m_hMF = 0; return h; }
+    WXHANDLE Detach() { WXHANDLE h = m_hMF; m_hMF = NULL; return h; }
 
     // Destroy the given HENHMETAFILE object.
     static void Free(WXHANDLE handle);
@@ -109,7 +113,7 @@ private:
     wxDECLARE_DYNAMIC_CLASS_NO_COPY(wxEnhMetaFileDC);
 };
 
-#if wxUSE_DRAG_AND_DROP
+#if wxUSE_DATAOBJ
 
 // ----------------------------------------------------------------------------
 // wxEnhMetaFileDataObject is a specialization of wxDataObject for enh metafile
@@ -190,6 +194,8 @@ protected:
     wxDECLARE_NO_COPY_CLASS(wxEnhMetaFileSimpleDataObject);
 };
 
-#endif // wxUSE_DRAG_AND_DROP
+#endif // wxUSE_DATAOBJ
+
+#endif // wxUSE_ENH_METAFILE
 
 #endif // _WX_MSW_ENHMETA_H_

@@ -28,15 +28,21 @@
 #include "wx/unix/utilsx11.h"
 
 #ifdef __WXGTK3__
-#include <gdk/gdk.h>
-#include <gtk/gtk.h>
+#include "wx/utils.h"
+
+#include "wx/gtk/private/wrapgtk.h"
+GtkWidget* wxGetTopLevelGTK();
 #endif
 
 // Normally we fall back on "plain X" implementation if XTest is not available,
 // but it's useless to do it when using GTK+ 3 as it's not going to work with
 // it anyhow because GTK+ 3 needs XInput2 events and not the "classic" ones we
 // synthesize here, so don't even compile in this code for wxGTK3 port.
-#define wxUSE_PLAINX_IMPL (!defined(__WXGTK3__))
+#ifdef __WXGTK3__
+    #define wxUSE_PLAINX_IMPL 0
+#else
+    #define wxUSE_PLAINX_IMPL 1
+#endif
 
 namespace
 {
@@ -104,7 +110,12 @@ bool wxUIActionSimulatorX11Impl::SendButtonEvent(int button, bool isDown)
     // all pending events, notably mouse moves.
     XSync(m_display, False /* don't discard */);
 
-    return DoX11Button(xbutton, isDown);
+    if ( !DoX11Button(xbutton, isDown) )
+        return false;
+
+    XFlush(m_display);
+
+    return true;
 }
 
 #if wxUSE_PLAINX_IMPL
@@ -239,7 +250,7 @@ private:
 
 bool wxUIActionSimulatorXTestImpl::DoX11Button(int xbutton, bool isDown)
 {
-    return XTestFakeButtonEvent(m_display, xbutton, isDown, 0) != 0;
+    return XTestFakeButtonEvent(m_display, xbutton, isDown, CurrentTime) != 0;
 }
 
 bool wxUIActionSimulatorXTestImpl::DoX11MouseMove(long x, long y)
@@ -252,20 +263,17 @@ bool wxUIActionSimulatorXTestImpl::DoX11MouseMove(long x, long y)
 #if GTK_CHECK_VERSION(3,10,0)
     if ( gtk_check_version(3, 10, 0) == NULL )
     {
-        if ( GdkScreen* const screen = gdk_screen_get_default() )
-        {
-            // For multi-monitor support we would need to determine to which
-            // monitor the point (x, y) belongs, for now just use the scale
-            // factor of the main one.
-            gint const scale = gdk_screen_get_monitor_scale_factor(screen, 0);
-            x *= scale;
-            y *= scale;
-        }
+        // For multi-monitor support we would need to determine to which
+        // monitor the point (x, y) belongs, for now just use the scale
+        // factor of the main one.
+        gint const scale = gtk_widget_get_scale_factor(wxGetTopLevelGTK());
+        x *= scale;
+        y *= scale;
     }
 #endif // GTK+ 3.10+
 #endif // __WXGTK3__
 
-    return XTestFakeMotionEvent(m_display, -1, x, y, 0) != 0;
+    return XTestFakeMotionEvent(m_display, -1, x, y, CurrentTime) != 0;
 }
 
 bool
@@ -273,7 +281,7 @@ wxUIActionSimulatorXTestImpl::DoX11Key(KeyCode xkeycode,
                                        int WXUNUSED(modifiers),
                                        bool isDown)
 {
-    return XTestFakeKeyEvent(m_display, xkeycode, isDown, 0) != 0;
+    return XTestFakeKeyEvent(m_display, xkeycode, isDown, CurrentTime) != 0;
 }
 
 #endif // wxUSE_XTEST
@@ -327,6 +335,13 @@ bool wxUIActionSimulatorX11Impl::MouseMove(long x, long y)
 
 bool wxUIActionSimulatorX11Impl::MouseUp(int button)
 {
+#ifdef __WXGTK3__
+    // This is a horrible hack, but some mouse click events are just lost
+    // without any apparent reason when using GTK 3 without this, i.e. they
+    // simply never reach GTK in some runs of the tests.
+    wxMilliSleep(10);
+#endif
+
     return SendButtonEvent(button, false);
 }
 
@@ -340,7 +355,12 @@ bool wxUIActionSimulatorX11Impl::DoKey(int keycode, int modifiers, bool isDown)
     if ( xkeycode == NoSymbol )
         return false;
 
-    return DoX11Key(xkeycode, modifiers, isDown);
+    if ( !DoX11Key(xkeycode, modifiers, isDown) )
+        return false;
+
+    XFlush(m_display);
+
+    return true;
 }
 
 wxUIActionSimulator::wxUIActionSimulator()

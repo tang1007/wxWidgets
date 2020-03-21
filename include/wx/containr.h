@@ -44,9 +44,6 @@ public:
         // By default, we accept focus ourselves.
         m_acceptsFocusSelf = true;
 
-        // But we don't have any children accepting it yet.
-        m_acceptsFocusChildren = false;
-
         m_inSetFocus = false;
         m_winLastFocused = NULL;
     }
@@ -79,8 +76,7 @@ public:
 
     // Returns whether we or one of our children accepts focus.
     bool AcceptsFocusRecursively() const
-        { return AcceptsFocus() ||
-            (m_acceptsFocusChildren && HasAnyChildrenAcceptingFocus()); }
+        { return AcceptsFocus() || HasAnyChildrenAcceptingFocus(); }
 
     // We accept focus from keyboard if we accept it at all.
     bool AcceptsFocusFromKeyboard() const { return AcceptsFocusRecursively(); }
@@ -119,7 +115,11 @@ protected:
 
 private:
     // Update the window status to reflect whether it is getting focus or not.
-    void UpdateParentCanFocus();
+    void UpdateParentCanFocus(bool acceptsFocusChildren);
+    void UpdateParentCanFocus()
+    {
+        UpdateParentCanFocus(HasAnyFocusableChildren());
+    }
 
     // Indicates whether the associated window can ever have focus itself.
     //
@@ -128,9 +128,6 @@ private:
     // focused. But sometimes, e.g. for wxStaticBox, we can never have focus
     // ourselves and can only get it if we have any focusable children.
     bool m_acceptsFocusSelf;
-
-    // Cached value remembering whether we have any children accepting focus.
-    bool m_acceptsFocusChildren;
 
     // a guard against infinite recursion
     bool m_inSetFocus;
@@ -199,14 +196,13 @@ public:
         m_container.SetContainerWindow(this);
 
 #ifndef wxHAS_NATIVE_TAB_TRAVERSAL
-        BaseWindowClass::Connect(wxEVT_NAVIGATION_KEY,
-                wxNavigationKeyEventHandler(wxNavigationEnabled::OnNavigationKey));
+        BaseWindowClass::Bind(wxEVT_NAVIGATION_KEY,
+                              &wxNavigationEnabled::OnNavigationKey, this);
 
-        BaseWindowClass::Connect(wxEVT_SET_FOCUS,
-                wxFocusEventHandler(wxNavigationEnabled::OnFocus));
-
-        BaseWindowClass::Connect(wxEVT_CHILD_FOCUS,
-                wxChildFocusEventHandler(wxNavigationEnabled::OnChildFocus));
+        BaseWindowClass::Bind(wxEVT_SET_FOCUS,
+                              &wxNavigationEnabled::OnFocus, this);
+        BaseWindowClass::Bind(wxEVT_CHILD_FOCUS,
+                              &wxNavigationEnabled::OnChildFocus, this);
 #endif // !wxHAS_NATIVE_TAB_TRAVERSAL
     }
 
@@ -266,6 +262,12 @@ public:
     WXDLLIMPEXP_INLINE_CORE virtual bool HasTransparentBackground() wxOVERRIDE
     {
         return m_container.HasTransparentBackground();
+    }
+
+    WXDLLIMPEXP_INLINE_CORE
+    virtual void WXSetPendingFocus(wxWindow* win) wxOVERRIDE
+    {
+        return m_container.SetLastFocus(win);
     }
 #endif // __WXMSW__
 

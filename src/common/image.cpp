@@ -505,6 +505,12 @@ wxImage::Scale( int width, int height, wxImageResizeQuality quality ) const
 wxImage wxImage::ResampleNearest(int width, int height) const
 {
     wxImage image;
+
+    const unsigned long old_width  = M_IMGDATA->m_width;
+    const unsigned long old_height = M_IMGDATA->m_height;
+    wxCHECK_MSG(old_width  <= (ULONG_MAX >> 16) &&
+                old_height <= (ULONG_MAX >> 16), image, "image dimension too large");
+
     image.Create( width, height, false );
 
     unsigned char *data = image.GetData();
@@ -526,21 +532,19 @@ wxImage wxImage::ResampleNearest(int width, int height) const
         }
     }
 
-    long old_height = M_IMGDATA->m_height,
-         old_width  = M_IMGDATA->m_width;
-    long x_delta = (old_width<<16) / width;
-    long y_delta = (old_height<<16) / height;
+    const unsigned long x_delta = (old_width  << 16) / width;
+    const unsigned long y_delta = (old_height << 16) / height;
 
     unsigned char* dest_pixel = target_data;
 
-    long y = 0;
-    for ( long j = 0; j < height; j++ )
+    unsigned long y = 0;
+    for (int j = 0; j < height; j++)
     {
         const unsigned char* src_line = &source_data[(y>>16)*old_width*3];
         const unsigned char* src_alpha_line = source_alpha ? &source_alpha[(y>>16)*old_width] : 0 ;
 
-        long x = 0;
-        for ( long i = 0; i < width; i++ )
+        unsigned long x = 0;
+        for (int i = 0; i < width; i++)
         {
             const unsigned char* src_pixel = &src_line[(x>>16)*3];
             const unsigned char* src_alpha_pixel = source_alpha ? &src_alpha_line[(x>>16)] : 0 ;
@@ -568,41 +572,46 @@ struct BoxPrecalc
     int boxEnd;
 };
 
-inline int BoxBetween(int value, int low, int high)
-{
-    return wxMax(wxMin(value, high), low);
-}
-
 void ResampleBoxPrecalc(wxVector<BoxPrecalc>& boxes, int oldDim)
 {
     const int newDim = boxes.size();
     wxASSERT( oldDim > 0 && newDim > 0 );
-    if ( newDim > 1 )
-    {
-        // We want to map pixels in the range [0..newDim-1]
-        // to the range [0..oldDim-1]
-        const double scale_factor_1 = double(oldDim-1) / (newDim-1);
-        const int scale_factor_2 = (int)(scale_factor_1 / 2);
 
-        for ( int dst = 0; dst < newDim; ++dst )
-        {
-            // Source pixel in the Y direction
-            const int src_p = int(dst * scale_factor_1);
+    // We need to map pixel values in the range [-0.5 .. (newDim-1)+0.5]
+    // to the pixel values in the range [-0.5 .. (oldDim-1)+0.5].
+    // Transformation function is therefore:
+    //   pOld = sc * (pNew + 0.5) - 0.5, where sc = oldDim/newDim
+    //
+    // A new pixel pNew in the interval [pNew-0.5 .. pNew+0.5]
+    // is mapped to the old pixel in the interval [pOldLoBound..pOldUpBound],
+    // where:
+    //   pOldLoBound = sc * ((pNew-0.5) + 0.5) - 0.5 = sc * pNew - 0.5
+    //   pOldUpBound = sc * ((pNew+0.5) + 0.5) - 0.5 = sc * (pNew+1) - 0.5
+    // So, the lower bound of the pixel box (interval) is:
+    //   boxStart = round(pOldLoBound) = trunc((sc * pNew - 0.5) + 0.5) = trunc(sc * pNew)
+    // and the upper bound is:
+    // - if fraction(pOldUpBound) != 0.5 (bound inside the pixel):
+    //   boxEnd = round(pixOldUpBound) = trunc((sc * (pNew+1) - 0.5) + 0.5) = trunc(sc * (pNew+1))
+    //    e.g. for UpBound = 7.2 -> boxEnd = 7
+    //         for UpBound = 7.6 -> boxEnd = 8
+    // - if fraction(pOldUpBound) == 0.5 (bound at the edge of the pixel):
+    //   boxEnd = round(pOldUpBound)-1 = trunc((sc * (pNew+1) - 0.5) + 0.5) - 1 = trunc(sc * (pNew+1))-1
+    //    e.g. for UpBound = 7.5 -> boxEnd = 7 (not 8)
+    //
+    // In integer arithmetic:
+    //  boxStart = (oldDim * pNew) / newDim
+    //  boxEnd:
+    //   vEnd =  oldDim * (pNew+1) = oldDim * pNew + oldDim
+    //  if vEnd % newDim != 0 (frac(pOldUpBound) != 0.5) => boxEnd = vEnd / newDim
+    //  if vEnd % newDim == 0 (frac(pOldUpBound) == 0.5) => boxEnd = (vEnd / newDim) - 1
 
-            BoxPrecalc& precalc = boxes[dst];
-            precalc.boxStart = BoxBetween(int(src_p - scale_factor_1/2.0 + 1),
-                                          0, oldDim - 1);
-            precalc.boxEnd = BoxBetween(wxMax(precalc.boxStart + 1,
-                                              int(src_p + scale_factor_2)),
-                                        0, oldDim - 1);
-        }
-    }
-    else
+    int v = 0; // oldDim * 0
+    for ( int dst = 0; dst < newDim; dst++ )
     {
-        // Let's take entire source image.
-        BoxPrecalc& precalc = boxes[0];
-        precalc.boxStart = 0;
-        precalc.boxEnd = oldDim - 1;
+        BoxPrecalc& precalc = boxes[dst];
+        precalc.boxStart = v/newDim;
+        v += oldDim;
+        precalc.boxEnd = v%newDim != 0 ? v/newDim : (v/newDim)-1;
     }
 }
 
@@ -659,23 +668,48 @@ wxImage wxImage::ResampleBox(int width, int height) const
                     // Calculate the actual index in our source pixels
                     src_pixel_index = j * M_IMGDATA->m_width + i;
 
-                    sum_r += src_data[src_pixel_index * 3 + 0];
-                    sum_g += src_data[src_pixel_index * 3 + 1];
-                    sum_b += src_data[src_pixel_index * 3 + 2];
-                    if ( src_alpha )
+                    if (src_alpha)
+                    {
+                        sum_r += src_data[src_pixel_index * 3 + 0] * src_alpha[src_pixel_index];
+                        sum_g += src_data[src_pixel_index * 3 + 1] * src_alpha[src_pixel_index];
+                        sum_b += src_data[src_pixel_index * 3 + 2] * src_alpha[src_pixel_index];
                         sum_a += src_alpha[src_pixel_index];
+                    }
+                    else
+                    {
+                        sum_r += src_data[src_pixel_index * 3 + 0];
+                        sum_g += src_data[src_pixel_index * 3 + 1];
+                        sum_b += src_data[src_pixel_index * 3 + 2];
+                    }
 
                     averaged_pixels++;
                 }
             }
 
             // Calculate the average from the sum and number of averaged pixels
-            dst_data[0] = (unsigned char)(sum_r / averaged_pixels);
-            dst_data[1] = (unsigned char)(sum_g / averaged_pixels);
-            dst_data[2] = (unsigned char)(sum_b / averaged_pixels);
-            dst_data += 3;
-            if ( src_alpha )
+            if (src_alpha)
+            {
+                if (sum_a)
+                {
+                    dst_data[0] = (unsigned char)(sum_r / sum_a);
+                    dst_data[1] = (unsigned char)(sum_g / sum_a);
+                    dst_data[2] = (unsigned char)(sum_b / sum_a);
+                }
+                else
+                {
+                    dst_data[0] = 0;
+                    dst_data[1] = 0;
+                    dst_data[2] = 0;
+                }
                 *dst_alpha++ = (unsigned char)(sum_a / averaged_pixels);
+            }
+            else
+            {
+                dst_data[0] = (unsigned char)(sum_r / averaged_pixels);
+                dst_data[1] = (unsigned char)(sum_g / averaged_pixels);
+                dst_data[2] = (unsigned char)(sum_b / averaged_pixels);
+            }
+            dst_data += 3;
         }
     }
 
@@ -814,7 +848,7 @@ wxImage wxImage::ResampleBilinear(int width, int height) const
             dst_data += 3;
 
             if ( src_alpha )
-                *dst_alpha++ = static_cast<unsigned char>(a1 * dy1 + a2 * dy);
+                *dst_alpha++ = static_cast<unsigned char>(a1 * dy1 + a2 * dy +.5);
         }
     }
 
@@ -980,23 +1014,48 @@ wxImage wxImage::ResampleBicubic(int width, int height) const
 
                     // Create a sum of all velues for each color channel
                     // adjusted for the pixel's calculated weight
-                    sum_r += src_data[src_pixel_index * 3 + 0] * pixel_weight;
-                    sum_g += src_data[src_pixel_index * 3 + 1] * pixel_weight;
-                    sum_b += src_data[src_pixel_index * 3 + 2] * pixel_weight;
                     if ( src_alpha )
-                        sum_a += src_alpha[src_pixel_index] * pixel_weight;
+                    {
+                        const unsigned char a = src_alpha[src_pixel_index];
+                        sum_r += src_data[src_pixel_index * 3 + 0] * pixel_weight * a;
+                        sum_g += src_data[src_pixel_index * 3 + 1] * pixel_weight * a;
+                        sum_b += src_data[src_pixel_index * 3 + 2] * pixel_weight * a;
+                        sum_a += a * pixel_weight;
+                    }
+                    else
+                    {
+                        sum_r += src_data[src_pixel_index * 3 + 0] * pixel_weight;
+                        sum_g += src_data[src_pixel_index * 3 + 1] * pixel_weight;
+                        sum_b += src_data[src_pixel_index * 3 + 2] * pixel_weight;
+                    }
                 }
             }
 
             // Put the data into the destination image.  The summed values are
             // of double data type and are rounded here for accuracy
-            dst_data[0] = (unsigned char)(sum_r + 0.5);
-            dst_data[1] = (unsigned char)(sum_g + 0.5);
-            dst_data[2] = (unsigned char)(sum_b + 0.5);
-            dst_data += 3;
-
             if ( src_alpha )
+            {
+                if ( sum_a )
+                {
+                     dst_data[0] = (unsigned char)(sum_r / sum_a + 0.5);
+                     dst_data[1] = (unsigned char)(sum_g / sum_a + 0.5);
+                     dst_data[2] = (unsigned char)(sum_b / sum_a + 0.5);
+                }
+                else
+                {
+                    dst_data[0] = 0;
+                    dst_data[1] = 0;
+                    dst_data[2] = 0;
+                }
                 *dst_alpha++ = (unsigned char)sum_a;
+            }
+            else
+            {
+                dst_data[0] = (unsigned char)(sum_r + 0.5);
+                dst_data[1] = (unsigned char)(sum_g + 0.5);
+                dst_data[2] = (unsigned char)(sum_b + 0.5);
+            }
+            dst_data += 3;
         }
     }
 
@@ -1258,8 +1317,8 @@ wxImage wxImage::Rotate90( bool clockwise ) const
 
         for (long j = 0; j < height; j++)
         {
-            const unsigned char *source_data
-                                     = M_IMGDATA->m_data + (j*width + ii)*3;
+            const unsigned char *source_data =
+                M_IMGDATA->m_data + (j*width + ii)*3;
 
             for (long i = ii; i < next_ii; i++)
             {
@@ -1284,7 +1343,6 @@ wxImage wxImage::Rotate90( bool clockwise ) const
     if ( source_alpha )
     {
         unsigned char *alpha_data = image.GetAlpha();
-        unsigned char *target_alpha = 0 ;
 
         for (long ii = 0; ii < width; )
         {
@@ -1296,6 +1354,7 @@ wxImage wxImage::Rotate90( bool clockwise ) const
 
                 for (long i = ii; i < next_ii; i++)
                 {
+                    unsigned char* target_alpha;
                     if ( clockwise )
                     {
                         target_alpha = alpha_data + (i+1)*height - j - 1;
@@ -1874,10 +1933,10 @@ void wxImage::SetRGB( const wxRect& rect_, unsigned char r, unsigned char g, uns
         x2 = rect.GetRight() + 1,
         y2 = rect.GetBottom() + 1;
 
-    unsigned char *data wxDUMMY_INITIALIZE(NULL);
     int x, y, width = GetWidth();
     for (y = y1; y < y2; y++)
     {
+        unsigned char* data;
         data = M_IMGDATA->m_data + (y*width + x1)*3;
         for (x = x1; x < x2; x++)
         {
@@ -2426,7 +2485,8 @@ int wxImage::GetLoadFlags() const
 
 // Under Windows we can load wxImage not only from files but also from
 // resources.
-#if defined(__WINDOWS__) && wxUSE_WXDIB && wxUSE_IMAGE
+#if defined(__WINDOWS__) && wxUSE_WXDIB && wxUSE_IMAGE \
+&& !defined(__WXQT__) // undefined reference to `wxDIB::ConvertToImage(wxDIB::ConversionFlags) const'
     #define HAS_LOAD_FROM_RESOURCE
 #endif
 
@@ -2581,7 +2641,7 @@ bool wxImage::SaveFile( const wxString& WXUNUSED_UNLESS_STREAMS(filename),
 #if HAS_FILE_STREAMS
     wxCHECK_MSG( IsOk(), false, wxT("invalid image") );
 
-    ((wxImage*)this)->SetOption(wxIMAGE_OPTION_FILENAME, filename);
+    const_cast<wxImage*>(this)->SetOption(wxIMAGE_OPTION_FILENAME, filename);
 
     wxImageFileOutputStream stream(filename);
 
@@ -2601,7 +2661,7 @@ bool wxImage::SaveFile( const wxString& WXUNUSED_UNLESS_STREAMS(filename),
 #if HAS_FILE_STREAMS
     wxCHECK_MSG( IsOk(), false, wxT("invalid image") );
 
-    ((wxImage*)this)->SetOption(wxIMAGE_OPTION_FILENAME, filename);
+    const_cast<wxImage*>(this)->SetOption(wxIMAGE_OPTION_FILENAME, filename);
 
     wxImageFileOutputStream stream(filename);
 
@@ -2763,16 +2823,22 @@ bool wxImage::LoadFile( wxInputStream& stream, wxBitmapType type, int index )
 
     wxImageHandler *handler;
 
+    // do we issue warning/error messages?
+    const bool verbose = M_IMGDATA->m_loadFlags & Load_Verbose;
+
     if ( type == wxBITMAP_TYPE_ANY )
     {
         if ( !stream.IsSeekable() )
         {
-            // The error message about image data format being unknown below
-            // would be misleading in this case as we are not even going to try
-            // any handlers because CanRead() never does anything for not
-            // seekable stream, so try to be more precise here.
-            wxLogError(_("Can't automatically determine the image format "
-                         "for non-seekable input."));
+            if ( verbose )
+            {
+                // The error message about image data format being unknown below
+                // would be misleading in this case as we are not even going to try
+                // any handlers because CanRead() never does anything for not
+                // seekable stream, so try to be more precise here.
+                wxLogError(_("Can't automatically determine the image format "
+                             "for non-seekable input."));
+            }
             return false;
         }
 
@@ -2786,7 +2852,10 @@ bool wxImage::LoadFile( wxInputStream& stream, wxBitmapType type, int index )
                  return true;
         }
 
-        wxLogWarning( _("Unknown image data format.") );
+        if ( verbose )
+        {
+            wxLogWarning( _("Unknown image data format.") );
+        }
 
         return false;
     }
@@ -2795,13 +2864,19 @@ bool wxImage::LoadFile( wxInputStream& stream, wxBitmapType type, int index )
     handler = FindHandler(type);
     if ( !handler )
     {
-        wxLogWarning( _("No image handler for type %d defined."), type );
+        if ( verbose )
+        {
+            wxLogWarning( _("No image handler for type %d defined."), type );
+        }
         return false;
     }
 
     if ( stream.IsSeekable() && !handler->CanRead(stream) )
     {
-        wxLogError(_("This is not a %s."), handler->GetName());
+        if ( verbose )
+        {
+            wxLogError(_("This is not a %s."), handler->GetName());
+        }
         return false;
     }
 
@@ -2816,15 +2891,24 @@ bool wxImage::LoadFile( wxInputStream& stream, const wxString& mimetype, int ind
 
     wxImageHandler *handler = FindHandlerMime(mimetype);
 
+    // do we issue warning/error messages?
+    const bool verbose = M_IMGDATA->m_loadFlags & Load_Verbose;
+
     if ( !handler )
     {
-        wxLogWarning( _("No image handler for type %s defined."), mimetype.GetData() );
+        if ( verbose )
+        {
+            wxLogWarning( _("No image handler for type %s defined."), mimetype.GetData() );
+        }
         return false;
     }
 
     if ( stream.IsSeekable() && !handler->CanRead(stream) )
     {
-        wxLogError(_("Image is not of type %s."), mimetype);
+        if ( verbose )
+        {
+            wxLogError(_("Image is not of type %s."), mimetype);
+        }
         return false;
     }
 
@@ -3156,8 +3240,6 @@ void wxImage::RotateHue(double angle)
 {
     AllocExclusive();
 
-    unsigned char *srcBytePtr;
-    unsigned char *dstBytePtr;
     unsigned long count;
     wxImage::HSVValue hsv;
     wxImage::RGBValue rgb;
@@ -3166,6 +3248,8 @@ void wxImage::RotateHue(double angle)
     count = M_IMGDATA->m_width * M_IMGDATA->m_height;
     if ( count > 0 && !wxIsNullDouble(angle) )
     {
+        unsigned char* srcBytePtr;
+        unsigned char* dstBytePtr;
         srcBytePtr = M_IMGDATA->m_data;
         dstBytePtr = srcBytePtr;
         do
@@ -3368,16 +3452,17 @@ unsigned long wxImage::CountColours( unsigned long stopafter ) const
 {
     wxHashTable h;
     wxObject dummy;
-    unsigned char r, g, b;
     unsigned char *p;
-    unsigned long size, nentries, key;
+    unsigned long size, nentries;
 
     p = GetData();
-    size = GetWidth() * GetHeight();
+    size = static_cast<unsigned long>(GetWidth()) * GetHeight();
     nentries = 0;
 
     for (unsigned long j = 0; (j < size) && (nentries <= stopafter) ; j++)
     {
+        unsigned char r, g, b;
+        unsigned long key;
         r = *(p++);
         g = *(p++);
         b = *(p++);
@@ -3401,11 +3486,11 @@ unsigned long wxImage::ComputeHistogram( wxImageHistogram &h ) const
 
     h.clear();
 
-    const unsigned long size = GetWidth() * GetHeight();
+    const unsigned long size = static_cast<unsigned long>(GetWidth()) * GetHeight();
 
-    unsigned char r, g, b;
     for ( unsigned long n = 0; n < size; n++ )
     {
+        unsigned char r, g, b;
         r = *p++;
         g = *p++;
         b = *p++;

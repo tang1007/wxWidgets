@@ -718,7 +718,7 @@ public:
 /**
     Used in a C++ implementation file to complete the declaration of a class
     that has run-time type information.
-    
+
     @header{wx/object.h}
 
     Example:
@@ -726,7 +726,7 @@ public:
     @code
     wxIMPLEMENT_ABSTRACT_CLASS(wxCommand, wxObject);
 
-    wxCommand::wxCommand(void)
+    wxCommand::wxCommand()
     {
         ...
     }
@@ -736,7 +736,7 @@ public:
 
 /**
     Used in a C++ implementation file to complete the declaration of a class
-    that has run-time type information and two base classes. 
+    that has run-time type information and two base classes.
 
     @header{wx/object.h}
 */
@@ -754,7 +754,7 @@ public:
     @code
     wxIMPLEMENT_DYNAMIC_CLASS(wxFrame, wxWindow);
 
-    wxFrame::wxFrame(void)
+    wxFrame::wxFrame()
     {
         ...
     }
@@ -772,18 +772,20 @@ public:
 #define wxIMPLEMENT_DYNAMIC_CLASS2( className, baseClassName1, baseClassName2 )
 
 /**
-    Used in a C++ implementation file to complete the declaration of a class
-    that has run-time type information, and whose instances can be created
-    dynamically. The same as wxIMPLEMENT_DYNAMIC_CLASS().
+    Synonym for wxIMPLEMENT_ABSTRACT_CLASS().
+
+    Please prefer to use the more clear, if longer,
+    ::wxIMPLEMENT_ABSTRACT_CLASS in the new code.
 
     @header{wx/object.h}
 */
 #define wxIMPLEMENT_CLASS( className, baseClassName )
 
 /**
-    Used in a C++ implementation file to complete the declaration of a class
-    that has run-time type information and two base classes, and whose instances 
-    can be created dynamically. The same as wxIMPLEMENT_DYNAMIC_CLASS2().
+    Synonym for wxIMPLEMENT_ABSTRACT_CLASS2().
+
+    Please prefer to use the more clear, if longer,
+    ::wxIMPLEMENT_ABSTRACT_CLASS2 in the new code.
 
     @header{wx/object.h}
 */

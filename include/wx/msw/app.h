@@ -53,6 +53,23 @@ public:
     // variant registered without CS_[HV]REDRAW styles
     static const wxChar *GetNoRedrawClassSuffix() { return wxT("NR"); }
 
+    // Flags for GetRegisteredClassName()
+    enum
+    {
+        // Just a symbolic name indicating absence of any special flags.
+        RegClass_Default = 0,
+
+        // Return the name with the GetNoRedrawClassSuffix() appended to it.
+        RegClass_ReturnNR = 1,
+
+        // Don't register the class with CS_[HV]REDRAW styles. This is useful
+        // for internal windows for which we can guarantee that they will be
+        // never created with wxFULL_REPAINT_ON_RESIZE flag.
+        //
+        // Notice that this implies RegClass_ReturnNR.
+        RegClass_OnlyNR = 3
+    };
+
     // get the name of the registered Win32 class with the given (unique) base
     // name: this function constructs the unique class name using this name as
     // prefix, checks if the class is already registered and registers it if it
@@ -68,7 +85,8 @@ public:
     // or (default) -1 meaning that the class paints its background itself
     static const wxChar *GetRegisteredClassName(const wxChar *name,
                                                 int bgBrushCol = -1,
-                                                int extraStyles = 0);
+                                                int extraStyles = 0,
+                                                int flags = RegClass_Default);
 
     // return true if this name corresponds to one of the classes we registered
     // in the previous GetRegisteredClassName() calls
@@ -85,6 +103,10 @@ public:
     // use it.
     static wxLayoutDirection MSWGetDefaultLayout(wxWindow* parent = NULL);
 
+    // Call ProcessPendingEvents() but only if we need to do it, i.e. there was
+    // a recent call to WakeUpIdle().
+    void MSWProcessPendingEventsIfNeeded();
+
 protected:
     int    m_printMode; // wxPRINT_WINDOWS, wxPRINT_POSTSCRIPT
 
@@ -94,7 +116,7 @@ public:
 
 #if wxUSE_RICHEDIT
     // initialize the richedit DLL of (at least) given version, return true if
-    // ok (Win95 has version 1, Win98/NT4 has 1 and 2, W2K has 3)
+    // ok
     static bool InitRichEdit(int version = 2);
 #endif // wxUSE_RICHEDIT
 

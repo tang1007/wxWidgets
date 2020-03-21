@@ -3,7 +3,7 @@
 // Purpose:     wxMSW-specific wxTextEntry implementation
 // Author:      Vadim Zeitlin
 // Created:     2007-09-26
-// Copyright:   (c) 2007 Vadim Zeitlin <vadim@wxwindows.org>
+// Copyright:   (c) 2007 Vadim Zeitlin <vadim@wxwidgets.org>
 // Licence:     wxWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -81,11 +81,25 @@ protected:
     virtual bool DoAutoCompleteCustom(wxTextCompleter *completer) wxOVERRIDE;
 #endif // wxUSE_OLE
 
+    // Helper for wxTE_PROCESS_ENTER handling: activates the default button in
+    // the dialog containing this control if any.
+    bool ClickDefaultButtonIfPossible();
+
 private:
     // implement this to return the HWND of the EDIT control
     virtual WXHWND GetEditHWND() const = 0;
 
 #if wxUSE_OLE
+    // This method is called to process special keys such as Return and Tab
+    // before they're consumed by the auto-completer. Notice that it is only
+    // called if we do need to process the key, i.e. if the corresponding
+    // wxTE_PROCESS_XXX style is set in the associated object.
+    //
+    // It is not pure virtual because it won't get called if the derived class
+    // doesn't use auto-completer, but it does need to be overridden if it can
+    // be called and the default implementation asserts if this is not the case.
+    virtual void MSWProcessSpecialKey(wxKeyEvent& event);
+
     // Get the auto-complete object creating it if necessary. Returns NULL if
     // creating it failed.
     wxTextAutoCompleteData *GetOrCreateCompleter();

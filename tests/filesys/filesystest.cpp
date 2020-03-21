@@ -39,9 +39,9 @@ public:
     wxString RightLocation(const wxString& p) { return GetRightLocation(p); }
     wxString Anchor(const wxString& p) { return GetAnchor(p); }
 
-    bool CanOpen(const wxString& WXUNUSED(url)) { return false; }
+    bool CanOpen(const wxString& WXUNUSED(url)) wxOVERRIDE { return false; }
     wxFSFile *OpenFile(wxFileSystem& WXUNUSED(fs),
-                       const wxString& WXUNUSED(url)) { return NULL; }
+                       const wxString& WXUNUSED(url)) wxOVERRIDE { return NULL; }
 
 
 };
@@ -180,7 +180,7 @@ void FileSystemTestCase::FileNameToUrlConversion()
         wxString url1 = wxFileSystem::FileNameToURL(fn1);
 
         CPPUNIT_ASSERT_EQUAL( d.expected, url1 );
-        CPPUNIT_ASSERT( fn1.SameAs(wxFileSystem::URLToFileName(url1)) );
+        CPPUNIT_ASSERT( fn1.SameAs(wxFileName::URLToFileName(url1)) );
     }
 }
 
@@ -196,7 +196,7 @@ void FileSystemTestCase::UnicodeFileNameToUrlConversion()
 
     wxString url = wxFileSystem::FileNameToURL(filename);
 
-    CPPUNIT_ASSERT( filename.SameAs(wxFileSystem::URLToFileName(url)) );
+    CPPUNIT_ASSERT( filename.SameAs(wxFileName::URLToFileName(url)) );
 }
 
 #endif // wxUSE_FILESYSTEM
